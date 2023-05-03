@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>joint plot</title>
+
+    <script src="scatter_plot.js?2"></script>
+    <script src="bar_plot.js?2"></script>
+
+    <link rel="stylesheet" href="../styles/style.css">
+    <style>
+        .fig{
+            fill: #faf8f8;
+        }
+        table{
+            border: 1px solid #d2bcbc;
+            border-collapse: collapse;
+            width: 60vw;
+        }
+        td{
+            border: 1px solid #d2bcbc;
+            border-collapse: collapse;
+            padding: 10px;
+            width: 10vw;
+        }
+    </style>
+    <script src="../lib/d3.js"></script>
+
+
+</head>
+<body>
+
+<!-- https://seaborn.pydata.org/generated/seaborn.jointplot.html -->
+<!--palmer_penguin_species: https://raw.githubusercontent.com/datavizpyr/data/master/palmer_penguin_species.tsv -->
+<table>
+    <tr>
+        <td><svg width="500px" height="150px"  id="top"></svg></td>
+        <td width="10%">&nbsp</td>
+    </tr>
+    <tr>
+        <td><svg width="500px" height="500px" viewBox="0 0 1000 1000" id="main"></svg></td>
+        <td><svg width="150px" height="500px" id="right"></svg></td>
+    </tr>
+</table>
+
+<script>
+    let palmer_penguin_species = "../data/palmer_penguin_species.tsv";
+    // loading data
+    d3.tsv(palmer_penguin_species).then(main)
+
+    // Subplots
+    let fig_main = d3.select("#main")
+        .append("g")
+        .append('rect')
+        .attr("class","fig")
+        .attr("width","100%")
+        .attr("height","100%")
+    // top svg
+    let fig_top = d3.select("#top")
+        .append("g")
+        .append('rect')
+        .attr("class","fig")
+        .attr("width","100%")
+        .attr("height","100%")
+    // right svg
+    let fig_right = d3.select("#right")
+        .append("g")
+        .append('rect')
+        .attr("class","fig")
+        .attr("width","100%")
+        .attr("height","100%")
+
+    function main(data){
+        // fetch data from table
+        let culmen_length_mm = d3.map(data,function (d){
+            return +d.culmen_length_mm})
+        let culmen_depth_mm = d3.map(data,function (d){
+            return +d.culmen_depth_mm})
+        let flipper_length_mm = d3.map(data,function (d){
+            return +d.flipper_length_mm})
+        let species = d3.map(data,function (d){
+            return d.species})
+        let species_types = new Set(species)
+
+        let species_code = d3.map(data,function (d) {
+            species = d.species
+            if (species === "Adelie") {
+                return 0
+            } else if (species === "Gentoo") {
+                return 1
+            } else {
+                return 2
+            }
+        })
+
+        // main svg
+       
+        let x_extent = d3.extent(culmen_length_mm.values())
+        let y_extent = d3.extent(culmen_depth_mm.values())
+        let size_extent = d3.extent(flipper_length_mm.values())
+
+        // Scales
+        let x_scale = d3.scaleLinear()
+            .domain([x_extent[0] - 1, x_extent[1] + 1])
+            .range([0, 800])
+            .nice()
+
+        let y_scale = d3.scaleLinear()
+            .domain([y_extent[0] - 1, y_extent[1] + 1])
+            .range([800, 0])
+            .nice()
+
+        let size_scale = d3.scaleSqrt()
+            .domain([size_extent[0], size_extent[1]])
+            .range([5, 20])
+
+        // create axis
+        let x_axis = d3.axisBottom()
+            .scale(x_scale)
+        let y_axis = d3.axisLeft()
+            .scale(y_scale)
+
+        fig_main.append("g")
+            .attr("transform", "translate(100,900)")
+            .call(x_axis)
+
+        fig_main.append("g")
+            .attr("transform", "translate(100,100)")
+            .call(y_axis)
+
+        // create x-axis label
+        fig_main.append("text")
+            .attr("x", 500)
+            .attr("y", 970)
+            .style("text-anchor", "middle")
+            .text("Culmen Length (mm)")
+
+        // create y-axis label
+        fig_main.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 10)
+            .attr("x", -500)
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .text("Culmen Depth (mm)")
+
+        // create scatter plot
+        let circles = fig_main.selectAll("circle")
+            .data(data)
+            .join("circle")
+            .attr("cx", d => x_scale(d.culmen_length_mm) + 100)
+            .attr("cy", d => y_scale(d.culmen_depth_mm) + 100)
+            .attr("r", d => size_scale(d.flipper_length_mm))
+            .attr("fill", d => {
+                if (d.species === "Adelie") {
+                    return "purple"
+                } else if (d.species === "Gentoo") {
+                    return "orange"
+                } else {
+                    return "lightblue"
+                }
+            })
+
+        // create right bar plot
+        let bar_data = d3.rollup(data, v => v.length, d => d.species)
+        let bar_height_scale = d3.scaleLinear()
+            .domain([0, d3.max(bar_data.values())])
+            .range([0, 400])
+
+        let bar_width_scale = d3.scaleBand()
+            .domain(species_types)
+            .range([0, 100])
+            .padding(0.2)
+
+        let bar_x_axis = d3.axisBottom()
+            .scale(bar_width_scale)
+
+        fig_right.append("g")
+            .attr("transform", "translate(20,100)")
+            .call(bar_x_axis)
+
+        let bars = fig_right.selectAll("rect")
+            .data(bar_data.entries())
+            .join("rect")
+            .attr("x", d => bar_width_scale(d.key) + 20)
+            .attr("y", d => 500 - bar_height_scale(d.value))
+            .attr("width", bar_width_scale.bandwidth())
+            .attr("height", d => bar
